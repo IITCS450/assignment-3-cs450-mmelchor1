@@ -149,7 +149,9 @@ _%: %.o $(ULIB)
 	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $@ $^
 	$(OBJDUMP) -S $@ > $*.asm
 	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
-
+_testlottery: ../user/testlottery.c $(ULIB)
+	$(CC) $(CFLAGS) -nostdinc -I. -c ../user/testlottery.c -o testlottery.o
+	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o _testlottery testlottery.o $(ULIB)
 _forktest: forktest.o $(ULIB)
 	# forktest has less library code linked in - needs to be small
 	# in order to be able to max out the proc table.
@@ -181,6 +183,7 @@ UPROGS=\
 	_usertests\
 	_wc\
 	_zombie\
+	_testlottery\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)
@@ -282,5 +285,3 @@ tar:
 	mkdir -p /tmp/xv6
 	cp dist/* dist/.gdbinit.tmpl /tmp/xv6
 	(cd /tmp; tar cf - xv6) | gzip >xv6-rev10.tar.gz  # the next one will be 10 (9/17)
-
-.PHONY: dist-test dist
