@@ -7,6 +7,11 @@
 #include "proc.h"
 #include "spinlock.h"
 
+unsigned int next = 1;
+int random(int max) {
+  next = next * 1103515245 + 12345;
+  return (unsigned int)(next/65536) % max;
+}
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -332,23 +337,39 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
+    // calclate total tickets for all runnable processes
+    int total_tickets = 0;
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
+      if(p->state == RUNNABLE)
+        total_tickets += p->tickets;
+    }
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+    if(total_tickets > 0){
+      // Draw a winner uniformly from [0, total)
+      int winner = random(total_tickets);
+      int running_sum = 0;
 
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
+      // Scan to find the process that owns the winning ticket
+      for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+        if(p->state != RUNNABLE)
+          continue;
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
+        running_sum += p->tickets;
+        if(running_sum > winner){
+          // Run that process
+          c->proc = p;
+          switchuvm(p);
+          p->state = RUNNING;
+
+          swtch(&(c->scheduler), p->context);
+          switchkvm();
+
+          c->proc = 0;
+          
+          // Break the inner loop to start a new lottery round
+          break; 
+        }
+      }
     }
     release(&ptable.lock);
 
